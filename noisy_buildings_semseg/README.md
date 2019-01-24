@@ -13,3 +13,14 @@ For each noise type (ie. randomly shifting and deleting buildings) and noise lev
 * Run a small test local experiment using `rastervision run local -e noisy_buildings_semseg.exp -a test True -a use_remote_data False`
 * Run a full remote experiment using `rastervision run aws_batch -e noisy_buildings_semseg.exp -a test False -a use_remote_data True`
 * When the individual experiments finish running, plot some curves based on the  evaluations using `python -m noisy_buildings_semseg.plot_curves`, and images of noisy labels and predictions using `python -m noisy_buildings_semseg.plot_images`.
+
+## Results
+### Randomly deleting labels
+![Noisy labels](results/noisy-labels-drop.png)
+![Accuracy across noise levels](results/plot-drop.png)
+![Predictions across noise levels](results/preds-drop.png)
+
+### Randomly shifting labels
+![Noisy labels](results/noisy-labels-shift.png)
+![Accuracy across noise levels](results/plot-shift.png)
+![Predictions across noise levels](results/preds-shift.png)
