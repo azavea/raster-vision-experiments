@@ -7,7 +7,8 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 from rastervision.utils.files import file_to_str, make_dir
-from noisy_buildings_semseg.data import get_root_uri, get_exp_id, NoiseMode
+from noisy_buildings_semseg.data import (
+    get_root_uri, get_exp_id, NoiseMode, rv_output_dir)
 
 
 class Stats():
@@ -30,7 +31,7 @@ def get_stats(root_uri, noise_type, levels, runs):
         for run in runs:
             noise_mode = NoiseMode(noise_type, level)
             exp_id = get_exp_id(noise_mode, run)
-            eval_uri = os.path.join(root_uri, 'rv', 'eval', exp_id, 'eval.json')
+            eval_uri = os.path.join(root_uri, rv_output_dir, 'eval', exp_id, 'eval.json')
             eval_json = json.loads(file_to_str(eval_uri))
 
             class_id = 1
@@ -58,11 +59,11 @@ def save_plot(plot_uri, noise_type, stats):
     plt.xticks(stats.levels)
     plt.ylim([0.0, 1.0])
     plt.xlabel('Noise level')
-    plt.ylabel('Prediction accuracy')
+    plt.ylabel('Prediction metrics')
     plt.legend()
 
     if noise_type == NoiseMode.DROP:
-        title = 'Trained on randomly deleted labels'
+        title = 'Trained on randomly dropped labels'
     elif noise_type == NoiseMode.SHIFT:
         title = 'Trained on randomly shifted labels'
     plt.title(title)
@@ -81,8 +82,8 @@ def main():
         print('Saving plot to {}...'.format(plot_uri))
         save_plot(plot_uri, noise_type, stats)
 
-    process_noise_type(NoiseMode.SHIFT, [0, 10, 20, 40], [0])
-    process_noise_type(NoiseMode.DROP, [0.0, 0.1, 0.2, 0.4], [0])
+    process_noise_type(NoiseMode.SHIFT, [0, 10, 20, 30, 40, 50], [0])
+    process_noise_type(NoiseMode.DROP, [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], [0])
 
 
 if __name__ == '__main__':
