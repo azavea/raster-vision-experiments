@@ -3,11 +3,11 @@ import os
 
 import rastervision as rv
 from noisy_buildings_semseg.data import (
-    VegasBuildings, get_root_uri, get_exp_id, NoiseMode)
+    VegasBuildings, get_root_uri, get_exp_id, NoiseMode, rv_output_dir)
 
 
 def build_scene(task, spacenet_config, noise_mode, id, is_validation):
-    raster_source = rv.RasterSourceConfig.builder(rv.GEOTIFF_SOURCE) \
+    raster_source = rv.RasterSourceConfig.builder(rv.RASTERIO_SOURCE) \
                       .with_uri(spacenet_config.get_raster_source_uri(id)) \
                       .with_channel_order([0, 1, 2]) \
                       .with_stats_transformer() \
@@ -72,16 +72,13 @@ def build_task(class_map):
                         .with_chip_size(300) \
                         .with_classes(class_map) \
                         .with_chip_options(
-                            chips_per_scene=9,
-                            debug_chip_probability=1.0,
-                            negative_survival_probability=0.25,
-                            target_classes=[1],
-                            target_count_threshold=1000) \
+                            window_method='sliding',
+                            stride=300) \
                         .build()
     return task
 
 
-def build_backend(task, test):
+def build_deeplab_backend(task, test):
     debug = False
     batch_size = 8
     num_steps = 30000
@@ -98,6 +95,31 @@ def build_backend(task, test):
                               .with_debug(debug) \
                               .build()
 
+    return backend
+
+
+def build_fastai_backend(task, test):
+    debug = False
+    batch_sz = 8
+    num_epochs = 10
+    if test:
+        debug = True
+        batch_sz = 1
+        num_epochs = 1
+
+    config = {
+        'batch_sz': batch_sz,
+        'num_epochs': num_epochs,
+        'debug': debug,
+        'lr': 1e-4,
+        'sync_interval': 10,
+        'model_arch': 'resnet18'
+    }
+
+    backend = rv.BackendConfig.builder('FASTAI_SEMANTIC_SEGMENTATION') \
+                              .with_task(task) \
+                              .with_train_options(**config) \
+                              .build()
     return backend
 
 
@@ -121,7 +143,6 @@ class NoisyBuildingsSemseg(rv.ExperimentSet):
         uses the noisy labels -- the validation set uses the original labels.
 
         Args:
-            root_uri: (str): root of where to put output
             use_remote_data: (bool or str) if True or 'True', then use data from S3,
                 else local
             test: (bool or str) if True or 'True', run a very small experiment as a
@@ -130,7 +151,7 @@ class NoisyBuildingsSemseg(rv.ExperimentSet):
         test = str_to_bool(test)
         use_remote_data = str_to_bool(use_remote_data)
         root_uri = get_root_uri(use_remote_data)
-        root_uri = os.path.join(root_uri, 'rv')
+        root_uri = os.path.join(root_uri, rv_output_dir)
         spacenet_config = VegasBuildings(use_remote_data)
         experiments = []
         runs = [0]
@@ -139,27 +160,29 @@ class NoisyBuildingsSemseg(rv.ExperimentSet):
             NoiseMode(NoiseMode.SHIFT, 0),
             NoiseMode(NoiseMode.SHIFT, 10),
             NoiseMode(NoiseMode.SHIFT, 20),
-            NoiseMode(NoiseMode.SHIFT, 40)
-        ]
-
-        noise_modes = [
+            NoiseMode(NoiseMode.SHIFT, 30),
+            NoiseMode(NoiseMode.SHIFT, 40),
+            NoiseMode(NoiseMode.SHIFT, 50),
             NoiseMode(NoiseMode.DROP, 0.0),
             NoiseMode(NoiseMode.DROP, 0.1),
             NoiseMode(NoiseMode.DROP, 0.2),
-            NoiseMode(NoiseMode.DROP, 0.4)
+            NoiseMode(NoiseMode.DROP, 0.3),
+            NoiseMode(NoiseMode.DROP, 0.4),
+            NoiseMode(NoiseMode.DROP, 0.5)
         ]
 
         for nm in noise_modes:
             for run in runs:
                 exp_id = get_exp_id(nm, run)
                 task = build_task(spacenet_config.get_class_map())
-                backend = build_backend(task, test)
+                backend = build_fastai_backend(task, test)
                 analyzer = rv.AnalyzerConfig.builder(rv.STATS_ANALYZER) \
                                             .build()
                 dataset = build_dataset(task, spacenet_config, test, nm)
 
                 experiment = rv.ExperimentConfig.builder() \
                                                 .with_id(exp_id) \
+                                                .with_analyze_key('shift-0-0') \
                                                 .with_task(task) \
                                                 .with_backend(backend) \
                                                 .with_analyzer(analyzer) \

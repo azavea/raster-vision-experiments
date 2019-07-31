@@ -6,13 +6,19 @@ from rastervision.utils.files import list_paths
 # You may need to adjust these URIs.
 remote_root_uri = 's3://raster-vision-lf-dev/noisy-buildings-semseg/'
 local_root_uri = '/opt/data/noisy-buildings-semseg/'
+rv_output_dir = 'rv-fastai'
 remote_raw_data_uri = ('s3://spacenet-dataset/SpaceNet_Buildings_Dataset_Round2/'
                        'spacenetV2_Train/AOI_2_Vegas')
-local_raw_data_uri = '/opt/data/AOI_2_Vegas_Train'
+local_raw_data_uri = ('/opt/data/raw-data/spacenet-dataset/'
+                      'SpaceNet_Buildings_Dataset_Round2/'
+                      'spacenetV2_Train/AOI_2_Vegas')
 
 
 def get_root_uri(use_remote_data):
     return remote_root_uri if use_remote_data else local_root_uri
+
+
+stats_uri = os.path.join(get_root_uri(False), 'stats.json')
 
 
 def get_raw_data_uri(use_remote_data):

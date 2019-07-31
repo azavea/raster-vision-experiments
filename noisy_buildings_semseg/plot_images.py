@@ -7,15 +7,16 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import rasterio
+from shapely.geometry import shape
 
 import rastervision as rv
 from rastervision.rv_config import RVConfig
-from rastervision.data import ActivateMixin, StatsTransformer, RasterStats, GeoTiffSource
-from rastervision.data.utils import geojson_to_shapes
+from rastervision.data import (
+    ActivateMixin, StatsTransformer, RasterStats, RasterioSource, GeoJSONVectorSource)
 from rastervision.core import ClassMap
 from rastervision.utils.files import make_dir, file_to_str
 from noisy_buildings_semseg.data import (
-    get_root_uri, get_exp_id, NoiseMode, VegasBuildings)
+    get_root_uri, get_exp_id, NoiseMode, VegasBuildings, rv_output_dir)
 
 
 NOISY_LABELS = 'noisy-labels'
@@ -26,14 +27,15 @@ ExpData = collections.namedtuple(
 
 
 def get_exp_data(vb, nm, id):
-    tmp_dir = RVConfig.get_tmp_dir().name
+    tmp_dir_obj = RVConfig.get_tmp_dir()
+    tmp_dir = tmp_dir_obj.name
 
     # Get raster source.
     stats = RasterStats()
     stats.means = np.array([462.4939189390183, 633.5548961566001, 464.99947912120706])
     stats.stds = np.array([248.46624190502172, 271.07249107975275, 162.06929299061807])
     raster_uri = vb.get_raster_source_uri(id)
-    raster_source = GeoTiffSource([raster_uri], [StatsTransformer(stats)], tmp_dir)
+    raster_source = RasterioSource([raster_uri], [StatsTransformer(stats)], tmp_dir)
 
     # Get label raster source.
     background_class_id = 2
@@ -48,19 +50,21 @@ def get_exp_data(vb, nm, id):
         tmp_dir, raster_source.get_crs_transformer(), raster_source.get_extent(),
         class_map=class_map)
     '''
-    label_geoms = geojson_to_shapes(json.loads(
-        file_to_str(label_uri)), raster_source.get_crs_transformer())
+    label_geojson = GeoJSONVectorSource(
+        label_uri, raster_source.get_crs_transformer()).get_geojson()
+    label_geoms = [shape(f['geometry']) for f in label_geojson['features']]
 
     noisy_label_uri = vb.get_noisy_geojson_uri(nm, id)
-    noisy_label_geoms = geojson_to_shapes(json.loads(
-        file_to_str(noisy_label_uri)), raster_source.get_crs_transformer())
+    noisy_label_geojson = GeoJSONVectorSource(
+        noisy_label_uri, raster_source.get_crs_transformer()).get_geojson()
+    noisy_label_geoms = [shape(f['geometry']) for f in noisy_label_geojson['features']]
 
     # Get prediction raster source.
     run = 0
     exp_id = get_exp_id(nm, run)
     prediction_uri = os.path.join(
-        vb.root_uri, 'rv', 'predict', exp_id, '{}.tif'.format(id))
-    pred_raster_source = GeoTiffSource([prediction_uri], [], tmp_dir)
+        vb.root_uri, rv_output_dir, 'predict', exp_id, '{}.tif'.format(id))
+    pred_raster_source = RasterioSource([prediction_uri], [], tmp_dir)
 
     with ActivateMixin.compose(raster_source, pred_raster_source):
         # Plot labels.
@@ -86,12 +90,12 @@ def plot_labels(all_exp_data, noise_type, levels, ids, plot_mode, plot_dir):
 
             # Plot ground truth labels
             if not (plot_mode == NOISY_LABELS and noise_type == NoiseMode.DROP):
-                for label_geom, _ in exp_data.label_geoms:
+                for label_geom in exp_data.label_geoms:
                     x, y = label_geom.exterior.xy
                     plt.plot(x, y, color='lightblue', alpha=0.8, linewidth=0.5)
 
             if plot_mode == NOISY_LABELS:
-                for label_geom, _ in exp_data.noisy_label_geoms:
+                for label_geom in exp_data.noisy_label_geoms:
                     x, y = label_geom.exterior.xy
                     plt.plot(x, y, color='orange', alpha=0.8, linewidth=0.5)
 
@@ -128,15 +132,15 @@ def main():
     plot_dir = os.path.join(get_root_uri(False), 'plots', 'images')
     make_dir(plot_dir)
 
-    ids = [3590, 581, 1246]
+    ids = [3590, 1246]
     noise_types = [NoiseMode.SHIFT, NoiseMode.DROP]
     plot_modes = [NOISY_LABELS, PREDS]
     for noise_type in noise_types:
         all_exp_data = {}
         if noise_type == NoiseMode.SHIFT:
-            levels = [0, 10, 20, 40]
+            levels = [0, 20, 40]
         elif noise_type == NoiseMode.DROP:
-            levels = [0.0, 0.1, 0.2, 0.4]
+            levels = [0.0, 0.2, 0.4]
 
         for level in levels:
             for id in ids:
@@ -146,7 +150,7 @@ def main():
 
         for plot_mode in plot_modes:
             plot_labels(all_exp_data, noise_type, levels, ids, plot_mode, plot_dir)
-            
+
 
 if __name__ == '__main__':
     main()

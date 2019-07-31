@@ -62,11 +62,14 @@ def main():
     vb = VegasBuildings(use_remote_data)
     scene_ids = vb.get_scene_ids()
 
-    for shift in [0, 10, 20, 40]:
+    shifts = [0, 10, 20, 30, 40]
+    probs = [0.0, 0.1, 0.2, 0.3, 0.4]
+
+    for shift in shifts:
         nm = NoiseMode(NoiseMode.SHIFT, shift)
         make_noisy_data(scene_ids, vb, nm)
 
-    for prob in [0.0, 0.1, 0.2, 0.4]:
+    for prob in probs:
         nm = NoiseMode(NoiseMode.DROP, prob)
         make_noisy_data(scene_ids, vb, nm)
 
